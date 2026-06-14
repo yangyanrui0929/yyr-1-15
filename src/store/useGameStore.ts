@@ -14,6 +14,8 @@ import type {
   StoryRecord,
   ReputationHistory,
   Renovation,
+  DayActivity,
+  PerformanceIntensity,
 } from '@/types'
 import { STORIES } from '@/data/stories'
 import { initSnacks } from '@/data/snacks'
@@ -67,6 +69,16 @@ const initialState: GameState = {
   storyScores: {},
   isSettlement: false,
   lastSettlement: null,
+  storyteller: {
+    throatDamage: 0,
+    exhaustion: 0,
+    inspiration: 80,
+    consecutiveNights: 0,
+    todayActivity: '无',
+    performanceIntensity: '正常',
+    isMute: false,
+    flubbedLines: 0,
+  },
 }
 
 interface GameActions {
@@ -82,6 +94,8 @@ interface GameActions {
   nextDay: () => void
   resetGame: () => void
   addLedgerRecord: (type: LedgerRecord['type'], category: string, amount: number, note: string) => void
+  doDayActivity: (activity: DayActivity) => void
+  setPerformanceIntensity: (intensity: PerformanceIntensity) => void
 }
 
 export const useGameStore = create<GameState & GameActions>()(
@@ -170,7 +184,7 @@ export const useGameStore = create<GameState & GameActions>()(
 
         const availableStories = pickRandomStories(3)
 
-        set({
+        set((s) => ({
           phase: 'night',
           customers,
           seats,
@@ -180,7 +194,13 @@ export const useGameStore = create<GameState & GameActions>()(
           storyProgress: 0,
           performanceActive: false,
           currentInterruption: null,
-        })
+          storyteller: {
+            ...s.storyteller,
+            performanceIntensity: '正常',
+            isMute: false,
+            flubbedLines: 0,
+          },
+        }))
       },
 
       selectStory: (storyId: string, branchId: string) => {
@@ -290,7 +310,8 @@ export const useGameStore = create<GameState & GameActions>()(
           state.lastStoryDay,
           state.storyScores,
           state.reputation,
-          state.snacks
+          state.snacks,
+          state.storyteller
         )
 
         const storyRecord: StoryRecord = {
@@ -329,6 +350,14 @@ export const useGameStore = create<GameState & GameActions>()(
           lastStoryDay: { ...s.lastStoryDay, [state.currentStory!.id]: state.day },
           storyScores: newStoryScores,
           reputationHistory: [...s.reputationHistory, repHistory],
+          storyteller: {
+            ...s.storyteller,
+            throatDamage: Math.max(0, Math.min(100, s.storyteller.throatDamage + result.throatDelta)),
+            exhaustion: Math.max(0, Math.min(100, s.storyteller.exhaustion + result.exhaustionDelta)),
+            inspiration: Math.max(0, Math.min(100, s.storyteller.inspiration + result.inspirationDelta)),
+            isMute: result.hadMuteRisk,
+            flubbedLines: result.flubCount,
+          },
         }))
 
         get().addLedgerRecord('收入', '基础门票', result.baseEarnings, '晚场门票')
@@ -340,29 +369,46 @@ export const useGameStore = create<GameState & GameActions>()(
           get().addLedgerRecord('收入', '热度加成', result.storyHeatBonus, '故事热门')
         if (result.serialExpectBonus > 0)
           get().addLedgerRecord('收入', '连载期待', result.serialExpectBonus, '观众期待')
+        if (result.intensityBonus > 0)
+          get().addLedgerRecord('收入', '爆点收益', result.intensityBonus, '表演状态加成')
         if (result.tips > 0)
           get().addLedgerRecord('收入', '客人打赏', result.tips, '客人满意打赏')
         if (result.snackRevenue > 0)
           get().addLedgerRecord('收入', '茶点售卖', result.snackRevenue, '消费茶点')
         if (result.badReviewPenalty > 0)
           get().addLedgerRecord('支出', '差评损失', result.badReviewPenalty, '客人不满索赔')
+        if (result.flubPenalty > 0)
+          get().addLedgerRecord('支出', '失误损失', result.flubPenalty, result.hadMuteRisk ? '失声冷场' : `讲错桥段x${result.flubCount}`)
       },
 
       nextDay: () => {
-        set((s) => ({
-          day: s.day + 1,
-          phase: 'day',
-          weather: randomWeather(),
-          customers: [],
-          currentStory: null,
-          currentBranch: null,
-          storyProgress: 0,
-          availableStories: [],
-          performanceActive: false,
-          currentInterruption: null,
-          isSettlement: false,
-          seats: s.seats.map((seat) => ({ ...seat, occupied: false })),
-        }))
+        set((s) => {
+          const nightPassed = s.phase === 'night'
+          return {
+            day: s.day + 1,
+            phase: 'day',
+            weather: randomWeather(),
+            customers: [],
+            currentStory: null,
+            currentBranch: null,
+            storyProgress: 0,
+            availableStories: [],
+            performanceActive: false,
+            currentInterruption: null,
+            isSettlement: false,
+            seats: s.seats.map((seat) => ({ ...seat, occupied: false })),
+            storyteller: {
+              ...s.storyteller,
+              todayActivity: '无',
+              isMute: false,
+              flubbedLines: 0,
+              consecutiveNights: nightPassed ? s.storyteller.consecutiveNights + 1 : 0,
+              throatDamage: Math.max(0, s.storyteller.throatDamage - 5),
+              exhaustion: Math.max(0, s.storyteller.exhaustion - 10),
+              inspiration: Math.min(100, s.storyteller.inspiration + 5),
+            },
+          }
+        })
       },
 
       resetGame: () => {
@@ -385,6 +431,61 @@ export const useGameStore = create<GameState & GameActions>()(
           ],
         }))
       },
+
+      doDayActivity: (activity: DayActivity) => {
+        const state = get()
+        if (state.phase !== 'day') return
+        if (state.storyteller.todayActivity !== '无') return
+
+        let throatDelta = 0
+        let exhaustionDelta = 0
+        let inspirationDelta = 0
+        let goldCost = 0
+
+        switch (activity) {
+          case '润喉汤':
+            throatDelta = -25
+            inspirationDelta = 5
+            goldCost = 15
+            break
+          case '歇场':
+            throatDelta = -10
+            exhaustionDelta = -30
+            inspirationDelta = 10
+            break
+          case '短讲':
+            throatDelta = 5
+            exhaustionDelta = 10
+            inspirationDelta = 20
+            break
+        }
+
+        if (state.gold < goldCost) return
+
+        set((s) => ({
+          gold: s.gold - goldCost,
+          storyteller: {
+            ...s.storyteller,
+            throatDamage: Math.max(0, Math.min(100, s.storyteller.throatDamage + throatDelta)),
+            exhaustion: Math.max(0, Math.min(100, s.storyteller.exhaustion + exhaustionDelta)),
+            inspiration: Math.max(0, Math.min(100, s.storyteller.inspiration + inspirationDelta)),
+            todayActivity: activity,
+          },
+        }))
+
+        if (goldCost > 0) {
+          get().addLedgerRecord('支出', '养身调护', goldCost, `白天${activity}`)
+        }
+      },
+
+      setPerformanceIntensity: (intensity: PerformanceIntensity) => {
+        set((s) => ({
+          storyteller: {
+            ...s.storyteller,
+            performanceIntensity: intensity,
+          },
+        }))
+      },
     }),
     {
       name: 'teahouse-storyteller-save',
@@ -400,6 +501,7 @@ export const useGameStore = create<GameState & GameActions>()(
         reputationHistory: s.reputationHistory,
         lastStoryDay: s.lastStoryDay,
         storyScores: s.storyScores,
+        storyteller: s.storyteller,
       }),
     }
   )

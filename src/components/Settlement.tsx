@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Coins, Trophy, ArrowUp, ArrowDown, Sparkles } from 'lucide-react'
+import { Coins, Trophy, ArrowUp, ArrowDown, Sparkles, Mic, Coffee, Lightbulb, AlertTriangle } from 'lucide-react'
 import { useGameStore } from '@/store/useGameStore'
 
 interface RowProps {
@@ -91,12 +91,47 @@ export default function Settlement() {
           <Row label="座位视野加成" value={r.seatViewBonus} positive />
           <Row label="故事热度加成" value={r.storyHeatBonus} positive />
           <Row label="连载期待加成" value={r.serialExpectBonus} positive />
+          {r.intensityBonus !== 0 && <Row label="表演状态加成" value={r.intensityBonus} positive={r.intensityBonus > 0} />}
           <Row label="打赏收入" value={r.tips} positive />
           <Row label="茶点售卖利润" value={r.snackRevenue} positive />
           {r.badReviewPenalty > 0 && <Row label="差评索赔" value={r.badReviewPenalty} />}
+          {r.flubPenalty > 0 && <Row label={r.hadMuteRisk ? '失声冷场损失' : `讲错桥段 (${r.flubCount}次)`} value={r.flubPenalty} />}
         </div>
 
         <Row label="今夜合计收入" value={r.totalEarnings} positive showIcon highlight />
+
+        {r.hadMuteRisk && (
+          <div className="mt-3 p-3 bg-cinnabar/10 border border-cinnabar/30 rounded-lg">
+            <div className="flex items-center gap-2 text-cinnabar font-song text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              说书人今日失声，冷场严重！
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="text-center p-2 bg-paper-dark/40 rounded-lg">
+            <Mic className="w-4 h-4 mx-auto mb-1 text-cinnabar" />
+            <div className="text-xs text-ink-light">嗓伤变化</div>
+            <div className={`text-sm font-semibold ${r.throatDelta > 0 ? 'text-cinnabar' : 'text-tea'}`}>
+              {r.throatDelta > 0 ? '+' : ''}{r.throatDelta}
+            </div>
+          </div>
+          <div className="text-center p-2 bg-paper-dark/40 rounded-lg">
+            <Coffee className="w-4 h-4 mx-auto mb-1 text-sandal" />
+            <div className="text-xs text-ink-light">疲惫变化</div>
+            <div className={`text-sm font-semibold ${r.exhaustionDelta > 0 ? 'text-cinnabar' : 'text-tea'}`}>
+              {r.exhaustionDelta > 0 ? '+' : ''}{r.exhaustionDelta}
+            </div>
+          </div>
+          <div className="text-center p-2 bg-paper-dark/40 rounded-lg">
+            <Lightbulb className="w-4 h-4 mx-auto mb-1 text-tea" />
+            <div className="text-xs text-ink-light">灵感变化</div>
+            <div className={`text-sm font-semibold ${r.inspirationDelta > 0 ? 'text-tea' : 'text-cinnabar'}`}>
+              {r.inspirationDelta > 0 ? '+' : ''}{r.inspirationDelta}
+            </div>
+          </div>
+        </div>
 
         <div className="mt-5 flex items-center justify-center gap-3 py-3 rounded-xl bg-sandal/10 border-2 border-sandal/30">
           <Trophy className={`w-6 h-6 ${repColor}`} />

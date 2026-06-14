@@ -1,10 +1,16 @@
 import { useState } from 'react'
-import { Scroll, Flame, Heart, Users, UserCheck, Sparkles } from 'lucide-react'
+import { Scroll, Flame, Heart, Users, UserCheck, Sparkles, Zap, Wind, Gauge } from 'lucide-react'
 import { useGameStore } from '@/store/useGameStore'
-import type { Story, StoryBranch } from '@/types'
+import type { Story, StoryBranch, PerformanceIntensity } from '@/types'
 import { calcStoryHeat } from '@/utils/storyHeat'
 import { calcSerialExpect } from '@/utils/serialExpect'
 import { calcAvgTasteMatch } from '@/utils/tasteMatch'
+
+const INTENSITY_OPTIONS: { id: PerformanceIntensity; name: string; desc: string; icon: React.ReactNode; color: string }[] = [
+  { id: '轻松', name: '轻松讲述', desc: '收益-30%，消耗低', icon: <Wind className="w-4 h-4" />, color: 'text-tea' },
+  { id: '正常', name: '正常发挥', desc: '标准收益，正常消耗', icon: <Gauge className="w-4 h-4" />, color: 'text-gold' },
+  { id: '强撑', name: '卖力强撑', desc: '收益+40%，高风险', icon: <Zap className="w-4 h-4" />, color: 'text-cinnabar' },
+]
 
 export default function StoryPicker() {
   const {
@@ -19,6 +25,8 @@ export default function StoryPicker() {
     storyScores,
     startPerformance,
     customers,
+    storyteller,
+    setPerformanceIntensity,
   } = useGameStore()
 
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null)
@@ -207,8 +215,12 @@ export default function StoryPicker() {
           <div className="font-brush text-2xl text-sandal">{currentStory.title}</div>
           <div className="font-song text-lg text-ink mt-1">{currentBranch?.title}</div>
         </div>
-        <button onClick={startPerformance} className="btn-gold text-lg px-6 py-3">
-          🎭 开讲！
+        <button 
+          onClick={startPerformance} 
+          className="btn-gold text-lg px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={storyteller.isMute}
+        >
+          {storyteller.isMute ? '🔇 失声无法开讲' : '🎭 开讲！'}
         </button>
       </div>
       <div className="p-4 bg-paper-dark/30 rounded-lg border border-sandal/20 font-song leading-relaxed text-ink">
@@ -231,6 +243,42 @@ export default function StoryPicker() {
           </span>
           <span className="text-xs text-ink-light ml-2">（{seated.length} 位宾客）</span>
         </span>
+      </div>
+
+      <div className="mt-6">
+        <div className="text-sm text-ink-light mb-2 flex items-center gap-2">
+          <Zap className="w-4 h-4 text-gold" />
+          表演强度
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {INTENSITY_OPTIONS.map((opt) => {
+            const isSelected = storyteller.performanceIntensity === opt.id
+            return (
+              <button
+                key={opt.id}
+                onClick={() => setPerformanceIntensity(opt.id)}
+                className={`p-3 rounded-lg border-2 transition-all text-left ${
+                  isSelected
+                    ? 'border-gold bg-gold/10 ring-2 ring-gold/30'
+                    : 'border-sandal/30 bg-paper-dark/30 hover:border-gold/50'
+                }`}
+              >
+                <div className={`font-brush text-base ${opt.color} flex items-center gap-1`}>
+                  {opt.icon}
+                  {opt.name}
+                </div>
+                <div className="text-xs text-ink-light mt-1 font-song">
+                  {opt.desc}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+        {storyteller.throatDamage > 50 && storyteller.performanceIntensity === '强撑' && (
+          <div className="mt-2 text-xs text-cinnabar font-song bg-cinnabar/10 p-2 rounded border border-cinnabar/30">
+            ⚠️ 警告：嗓伤严重，强撑有失声风险！
+          </div>
+        )}
       </div>
     </div>
   )

@@ -7,6 +7,7 @@ import type {
   StoryRecord,
   SettlementResult,
   Snack,
+  StorytellerState,
 } from '@/types'
 import { calcAvgTasteMatch } from './tasteMatch'
 import { calcAvgSeatView } from './seatView'
@@ -26,7 +27,8 @@ export function calcSettlement(
   lastStoryDay: Record<string, number>,
   storyScores: Record<string, number[]>,
   reputation: number,
-  snacks: Snack[]
+  snacks: Snack[],
+  storyteller: StorytellerState
 ): SettlementResult {
   const audience = customers.filter((c) => c.seatId !== null)
   const audienceCount = audience.length
@@ -49,11 +51,59 @@ export function calcSettlement(
   const storyHeatBonus = Math.round(baseEarnings * (heat.value / 100) * 0.7)
   const serialExpectBonus = Math.round(baseEarnings * (expect.value / 100) * 0.4)
 
+  let intensityMultiplier = 1
+  let throatDelta = 0
+  let exhaustionDelta = 0
+  let inspirationDelta = 0
+
+  switch (storyteller.performanceIntensity) {
+    case '轻松':
+      intensityMultiplier = 0.7
+      throatDelta = 5
+      exhaustionDelta = 5
+      inspirationDelta = -5
+      break
+    case '正常':
+      intensityMultiplier = 1
+      throatDelta = 10
+      exhaustionDelta = 10
+      inspirationDelta = -8
+      break
+    case '强撑':
+      intensityMultiplier = 1.4
+      throatDelta = 25
+      exhaustionDelta = 25
+      inspirationDelta = -15
+      break
+  }
+
+  const consecutivePenalty = Math.min(0.3, storyteller.consecutiveNights * 0.05)
+  intensityMultiplier -= consecutivePenalty
+
+  const intensityBonus = Math.round(
+    (baseEarnings + tasteMatchBonus + seatViewBonus + storyHeatBonus + serialExpectBonus) *
+      (intensityMultiplier - 1)
+  )
+
+  const inspirationBonus = Math.round(baseEarnings * (storyteller.inspiration / 100) * 0.3)
+
+  const flubChance = (storyteller.throatDamage + storyteller.exhaustion) / 200
+  const actualFlubChance = storyteller.performanceIntensity === '强撑' 
+    ? Math.min(0.8, flubChance * 1.5) 
+    : Math.min(0.6, flubChance)
+  const flubCount = Math.floor(Math.random() * 3) + (Math.random() < actualFlubChance ? 1 : 0)
+  const flubPenalty = Math.round(baseEarnings * flubCount * 0.15)
+
+  const muteRisk = storyteller.throatDamage > 70 && storyteller.performanceIntensity === '强撑'
+  const hadMuteRisk = muteRisk && Math.random() < 0.3
+  const mutePenalty = hadMuteRisk ? Math.round(baseEarnings * 0.5) : 0
+
   let tips = 0
   for (const c of audience) {
     const satFactor = c.satisfaction / 100
     const genFactor = c.generosity / 5
-    tips += Math.round(c.wealth * satFactor * genFactor * 0.15)
+    const inspirationFactor = storyteller.inspiration / 100
+    tips += Math.round(c.wealth * satFactor * genFactor * 0.15 * (0.8 + inspirationFactor * 0.4))
   }
 
   const badReviewPenalty = calcBadReviewGold(customers)
@@ -81,13 +131,24 @@ export function calcSettlement(
     seatViewBonus +
     storyHeatBonus +
     serialExpectBonus +
+    intensityBonus +
+    inspirationBonus +
     tips +
     snackRevenue -
-    badReviewPenalty
+    badReviewPenalty -
+    flubPenalty -
+    mutePenalty
 
   const avgSatisfaction =
     audience.length > 0
-      ? Math.round(audience.reduce((s, c) => s + c.satisfaction, 0) / audience.length)
+      ? Math.round(
+          Math.max(
+            0,
+            audience.reduce((s, c) => s + c.satisfaction, 0) / audience.length -
+              flubCount * 5 -
+              (hadMuteRisk ? 20 : 0)
+          )
+        )
       : 0
 
   const satisfactionDelta = Math.round((avgSatisfaction - 50) * 0.15)
@@ -106,8 +167,15 @@ export function calcSettlement(
     badReviewPenalty,
     tips,
     snackRevenue,
+    intensityBonus: intensityBonus + inspirationBonus,
+    flubPenalty: flubPenalty + mutePenalty,
     totalEarnings,
     reputationDelta,
     avgSatisfaction,
+    throatDelta,
+    exhaustionDelta,
+    inspirationDelta,
+    hadMuteRisk,
+    flubCount,
   }
 }

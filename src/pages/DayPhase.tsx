@@ -5,6 +5,7 @@ import TeaShop from '@/components/TeaShop'
 import SeatGrid from '@/components/SeatGrid'
 import Renovation from '@/components/Renovation'
 import Ledger from '@/components/Ledger'
+import StorytellerCare from '@/components/StorytellerCare'
 import { useGameStore } from '@/store/useGameStore'
 
 export default function DayPhase() {
@@ -46,14 +47,17 @@ export default function DayPhase() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="space-y-6">
-            <TeaShop />
+            <StorytellerCare />
             <Renovation />
           </div>
           <div className="space-y-6">
-            <SeatGrid />
+            <TeaShop />
             <Ledger />
+          </div>
+          <div className="space-y-6">
+            <SeatGrid />
           </div>
         </div>
       </div>

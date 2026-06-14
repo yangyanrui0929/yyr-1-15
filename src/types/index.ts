@@ -2,6 +2,21 @@ export type Phase = 'day' | 'night'
 
 export type Weather = '晴' | '云' | '雨' | '雪'
 
+export type PerformanceIntensity = '轻松' | '正常' | '强撑'
+
+export type DayActivity = '润喉汤' | '歇场' | '短讲' | '无'
+
+export interface StorytellerState {
+  throatDamage: number
+  exhaustion: number
+  inspiration: number
+  consecutiveNights: number
+  todayActivity: DayActivity
+  performanceIntensity: PerformanceIntensity
+  isMute: boolean
+  flubbedLines: number
+}
+
 export type SnackCategory = '茶' | '小吃' | '点心'
 
 export interface Snack {
@@ -148,6 +163,7 @@ export interface GameState {
   storyScores: Record<string, number[]>
   isSettlement: boolean
   lastSettlement: SettlementResult | null
+  storyteller: StorytellerState
 }
 
 export interface SettlementResult {
@@ -161,9 +177,16 @@ export interface SettlementResult {
   badReviewPenalty: number
   tips: number
   snackRevenue: number
+  intensityBonus: number
+  flubPenalty: number
   totalEarnings: number
   reputationDelta: number
   avgSatisfaction: number
+  throatDelta: number
+  exhaustionDelta: number
+  inspirationDelta: number
+  hadMuteRisk: boolean
+  flubCount: number
 }
 
 export interface CalcResult {
